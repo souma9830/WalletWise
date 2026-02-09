@@ -4,30 +4,46 @@ const Transaction = require('../models/Transactions');
 const addTransaction = async (req, res) => {
     try {
         const userId = req.userId;
-        const { type, amount, category, description, paymentMethod, mood } = req.body;
+        const { type, amount, category, description, paymentMethod, mood, date } = req.body;
 
-        if (!type || !amount || !category) {
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: 'Unauthorized'
+            });
+        }
+
+        if (!type || amount === undefined || amount === null || !category) {
             return res.status(400).json({
                 success: false,
                 message: 'Type, amount, and category are required'
             });
         }
 
-        if (amount <= 0) {
+        const numericAmount = Number(amount);
+        if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Amount must be greater than 0'
+                message: 'Amount must be a valid number greater than 0'
+            });
+        }
+
+        if (!['income', 'expense'].includes(type)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Type must be either income or expense'
             });
         }
 
         const transaction = new Transaction({
             userId,
             type,
-            amount,
-            category,
-            description,
+            amount: numericAmount,
+            category: typeof category === 'string' ? category.trim().toLowerCase() : category,
+            description: typeof description === 'string' ? description.trim() : description,
             paymentMethod: paymentMethod || 'cash',
-            mood: mood || 'neutral'
+            mood: mood || 'neutral',
+            ...(date ? { date } : {})
         });
 
         await transaction.save();
@@ -49,6 +65,18 @@ const addTransaction = async (req, res) => {
 
     } catch (error) {
         console.error('Add transaction error:', error);
+
+        if (error?.name === 'ValidationError') {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation error',
+                errors: Object.values(error.errors || {}).map((e) => ({
+                    field: e?.path,
+                    message: e?.message
+                }))
+            });
+        }
+
         res.status(500).json({
             success: false,
             message: 'Error adding transaction'

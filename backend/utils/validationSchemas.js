@@ -49,13 +49,48 @@ const addAmountSchema = z.object({
 // ==================== TRANSACTION SCHEMAS ====================
 
 const transactionSchema = z.object({
-  type: z.enum(['income', 'expense'], { errorMap: () => ({ message: 'Type must be income or expense' }) }),
-  amount: z.number().positive('Amount must be positive'),
-  category: z.string().min(1, 'Category is required').max(50, 'Category name too long'),
-  description: z.string().max(200, 'Description too long').optional(),
-  paymentMethod: z.enum(['cash', 'card', 'upi', 'bank_transfer', 'other']).optional().default('cash'),
-  mood: z.enum(['happy', 'neutral', 'sad', 'stressed', 'impulsive']).optional().default('neutral'),
-  date: z.string().or(z.date()).optional()
+  type: z.preprocess(
+    (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
+    z.enum(['income', 'expense'], { errorMap: () => ({ message: 'Type must be income or expense' }) })
+  ),
+  amount: z.preprocess(
+    (value) => {
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        return trimmed === '' ? value : Number(trimmed);
+      }
+      return value;
+    },
+    z.number().finite().positive('Amount must be positive')
+  ),
+  category: z.preprocess(
+    (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
+    z.string().min(1, 'Category is required').max(50, 'Category name too long')
+  ),
+  description: z.preprocess(
+    (value) => (typeof value === 'string' ? value.trim() : value),
+    z.string().max(200, 'Description too long').optional().default('')
+  ),
+  paymentMethod: z.preprocess(
+    (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
+    z.enum(['cash', 'card', 'upi', 'online']).optional().default('cash')
+  ),
+  mood: z.preprocess(
+    (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
+    z.enum(['happy', 'stressed', 'bored', 'sad', 'calm', 'neutral']).optional().default('neutral')
+  ),
+  date: z.preprocess((value) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    if (value instanceof Date) {
+      return value;
+    }
+    if (typeof value === 'string' || typeof value === 'number') {
+      return new Date(value);
+    }
+    return value;
+  }, z.date().optional())
 });
 
 // ==================== USER/AUTH SCHEMAS ====================
