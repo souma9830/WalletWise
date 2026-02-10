@@ -10,7 +10,10 @@ import {
   FaIdCard,
   FaUniversity,
   FaGraduationCap,
-  FaPhone
+  FaPhone,
+  FaEye,
+  FaEyeSlash,
+  FaGoogle
 } from 'react-icons/fa';
 import './Auth.css';
 
@@ -27,6 +30,8 @@ const Signup = () => {
   });
 
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const navigate = useNavigate();
   const { signup } = useAuth();
 
@@ -148,7 +153,7 @@ const Signup = () => {
   };
 
   return (
-    <div className="auth-container">
+    <div className="auth-container signup-layout">
       <ToastContainer
         position="top-right"
         autoClose={5000}
@@ -160,13 +165,40 @@ const Signup = () => {
         draggable
         pauseOnHover
       />
+      <div className="auth-features signup-features">
+        <h1>Student Benefits</h1>
+        <ul>
+          <li>No-cost student plan</li>
+          <li>Smart budgeting templates</li>
+          <li>Insightful weekly summaries</li>
+          <li>Alerts for overspending</li>
+          <li>Export-ready reports</li>
+        </ul>
+      </div>
 
-      <div className="auth-card">
+      <div className="auth-panel">
         <div className="auth-header">
           <h1>WalletWise</h1>
           <p className="subtitle">Create your student account.</p>
           
         </div>
+
+        <button
+            type="button"
+            className="demo-btn google-btn"
+            onClick={() => {
+              const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+              window.location.href = `${apiBase}/auth/google`;
+            }}
+          >
+            <FaGoogle className="google-icon" />
+            Sign Up with Google
+          </button>
+
+          <div className="auth-divider">
+            <span>OR</span>
+          </div>
+        
 
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-row">
@@ -228,16 +260,26 @@ const Signup = () => {
                 <FaLock className="input-icon" />
                 Password * (min 6 chars)
               </label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                value={password}
-                onChange={handleChange}
-                placeholder="At least 6 characters"
-                required
-                disabled={loading}
-              />
+              <div className="password-input-wrapper">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  id="password"
+                  name="password"
+                  value={password}
+                  onChange={handleChange}
+                  placeholder="At least 6 characters"
+                  required
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}
+                  tabIndex={-1}
+                >
+                  {showPassword ? <FaEyeSlash /> : <FaEye />}
+                </button>
+              </div>
             </div>
 
             <div className="form-group">
@@ -245,16 +287,26 @@ const Signup = () => {
                 <FaLock className="input-icon" />
                 Confirm Password *
               </label>
-              <input
-                type="password"
-                id="confirmPassword"
-                name="confirmPassword"
-                value={confirmPassword}
-                onChange={handleChange}
-                placeholder="Confirm your password"
-                required
-                disabled={loading}
-              />
+              <div className="password-input-wrapper">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  value={confirmPassword}
+                  onChange={handleChange}
+                  placeholder="Confirm your password"
+                  required
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  tabIndex={-1}
+                >
+                  {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -336,21 +388,7 @@ const Signup = () => {
               'Create Account'
             )}
           </button>
-
-          <div className="auth-divider">
-            <span>OR</span>
-          </div>
-
-          <button
-            type="button"
-            className="demo-btn google-btn"
-            onClick={() => {
-              const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-              window.location.href = `${apiBase}/auth/google`;
-            }}
-          >
-            Continue with Google
-          </button>
+          
         </form>
 
         <div className="auth-footer">
@@ -363,17 +401,6 @@ const Signup = () => {
           </p>
          
         </div>
-      </div>
-
-      <div className="auth-features">
-        <h3>Student Benefits</h3>
-        <ul>
-          <li>No-cost student plan</li>
-          <li>Smart budgeting templates</li>
-          <li>Insightful weekly summaries</li>
-          <li>Alerts for overspending</li>
-          <li>Export-ready reports</li>
-        </ul>
       </div>
     </div>
   );
