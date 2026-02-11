@@ -7,8 +7,13 @@ const passport = require('passport');
 const { configurePassport } = require('./config/passport');
 dotenv.config();
 
+const helmet = require('helmet');
+
 // Initialize Express app
 const app = express();
+
+// ==================== SECURITY HEADERS ====================
+app.use(helmet());
 
 // ==================== ENHANCED ERROR LOGGING ====================
 process.on('uncaughtException', (error) => {
@@ -42,18 +47,30 @@ app.use(cookieParser());
 // Passport setup (Google OAuth)
 configurePassport();
 app.use(passport.initialize());
-
-// Request logging middleware
 app.use((req, res, next) => {
     const timestamp = new Date().toISOString();
     console.log(`\n═══════════════════════════════════════════════════`);
     console.log(`📨 ${timestamp} - ${req.method} ${req.originalUrl}`);
     console.log(`🌍 Origin: ${req.headers.origin || 'No origin'}`);
-    console.log(`🔑 Auth Header: ${req.headers.authorization || 'No auth header'}`);
-    console.log(`🍪 Cookies:`, req.cookies);
+    
+    // Mask Auth Header in logs
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+        console.log(`🔑 Auth Header: ${authHeader.substring(0, 15)}...[REDACTED]`);
+    } else {
+        console.log(`🔑 Auth Header: No auth header`);
+    }
 
     if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
-        console.log(`📝 Request Body:`, JSON.stringify(req.body, null, 2));
+        // Create a safe copy of the body for logging
+        const safeBody = { ...req.body };
+        const sensitiveKeys = ['password', 'token', 'refreshToken', 'accessToken', 'client_secret', 'code'];
+        
+        sensitiveKeys.forEach(key => {
+            if (safeBody[key]) safeBody[key] = '***[REDACTED]***';
+        });
+
+        console.log(`📝 Request Body:`, JSON.stringify(safeBody, null, 2));
     }
 
     next();
