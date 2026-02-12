@@ -32,11 +32,9 @@ const updateProfileSchema = z.object({
   phoneNumber: z.string().trim().optional(),
   department: z.string().trim().optional(),
   year: z.enum(['1st', '2nd', '3rd', '4th', '5th']).optional(),
-  // Profile Settings
   currency: z.string().optional(),
   dateFormat: z.string().optional(),
   language: z.string().optional(),
-  // Financial Settings
   incomeFrequency: z.string().optional(),
   incomeSources: z.string().optional(),
   priorities: z.string().optional(),
@@ -82,11 +80,10 @@ const safeUser = (user) => ({
   provider: user.provider,
   emailVerified: user.emailVerified,
   avatar: user.avatar,
-  // Profile Settings
   currency: user.currency,
   dateFormat: user.dateFormat,
   language: user.language,
-  // Financial Settings
+  
   incomeFrequency: user.incomeFrequency,
   incomeSources: user.incomeSources,
   priorities: user.priorities,
