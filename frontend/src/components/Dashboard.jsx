@@ -14,7 +14,7 @@ import {
   FaHandHoldingUsd, FaBullseye, FaChartBar, FaExclamationTriangle,
   FaBrain, FaArrowUp, FaCalendarAlt,
   FaSync, FaHome, FaExchangeAlt,
-  FaCog, FaChartPie, FaEdit, FaTrash
+  FaCog, FaChartPie, FaEdit, FaTrash, FaCalendarCheck, FaBell
 } from 'react-icons/fa';
 import { Line, Pie } from 'react-chartjs-2';
 
@@ -55,10 +55,12 @@ const Dashboard = () => {
   const [currentDate, setCurrentDate] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false); // New State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
 
   const userMenuRef = useRef(null);
+  const notificationsRef = useRef(null); // New Ref
   const mobileMenuRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -69,6 +71,9 @@ const Dashboard = () => {
     const handleClickOutside = (event) => {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
         setShowUserMenu(false);
+      }
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
+        setShowNotifications(false);
       }
       if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target)) {
         setIsMobileMenuOpen(false);
@@ -98,10 +103,21 @@ const Dashboard = () => {
   });
 
   const [recentTransactions, setRecentTransactions] = useState([]);
+  const [upcomingBills, setUpcomingBills] = useState([]); // New State
   const [categorySpending, setCategorySpending] = useState([]);
   const [weeklyExpenses, setWeeklyExpenses] = useState([]);
   const [savingsGoals, setSavingsGoals] = useState([]);
   const [transactionToEdit, setTransactionToEdit] = useState(null);
+
+  // Filter bills due in <= 3 days for notifications
+  const dueNotifications = upcomingBills.filter(bill => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDate = new Date(bill.dueDate);
+    const diffTime = dueDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays <= 3 && diffDays >= 0;
+  });
 
   // Navigation items with proper routes
   const navItems = [
@@ -110,6 +126,7 @@ const Dashboard = () => {
     { id: 'budget', label: 'Budget', icon: FaChartPie, path: '/budget' },
     { id: 'goals', label: 'Goals', icon: FaBullseye, path: '/goals' },
     { id: 'reports', label: 'Reports', icon: FaChartBar, path: '/reports' },
+    { id: 'subscriptions', label: 'Subscriptions', icon: FaCalendarCheck, path: '/subscriptions' },
     { id: 'settings', label: 'Settings', icon: FaCog, path: '/settings' }
   ];
 
@@ -141,6 +158,9 @@ const Dashboard = () => {
 
         // Transactions
         setRecentTransactions(dashboardData.recentTransactions || []);
+
+        // Upcoming Bills
+        setUpcomingBills(dashboardData.upcomingBills || []);
 
         // Category spending
         setCategorySpending(dashboardData.categorySpending || []);
@@ -508,68 +528,121 @@ const Dashboard = () => {
           </ul>
         </nav>
 
-        {/* Right: User Profile */}
-        <div className="nav-right" ref={userMenuRef}>
-          <button
-            className="user-profile-trigger"
-            onClick={() => setShowUserMenu(!showUserMenu)}
-            aria-expanded={showUserMenu}
-            aria-label="User menu"
-            aria-haspopup="true"
-          >
-            <div className="user-avatar" aria-hidden="true">
-              {user?.fullName?.charAt(0) || user?.name?.charAt(0) || 'U'}
-            </div>
-            <FaChevronDown className={`dropdown-arrow ${showUserMenu ? 'open' : ''}`} />
-          </button>
+        {/* Right: User Profile & Notifications */}
+        <div className="nav-right">
+          {/* Notification Bell */}
+          <div className="notification-wrapper" ref={notificationsRef}>
+            <button
+              className="notification-trigger"
+              onClick={() => setShowNotifications(!showNotifications)}
+              aria-label="Notifications"
+            >
+              <FaBell className="nav-icon" />
+              {dueNotifications.length > 0 && (
+                <span className="notification-badge">{dueNotifications.length}</span>
+              )}
+            </button>
 
-          {/* User Dropdown Menu */}
-          {showUserMenu && (
-            <div className="user-dropdown-menu" role="menu">
-              <div className="user-dropdown-header">
-                <div className="dropdown-avatar">
-                  {user?.fullName?.charAt(0) || user?.name?.charAt(0) || 'U'}
+            {/* Notification Dropdown */}
+            {showNotifications && (
+              <div className="notification-dropdown">
+                <div className="notification-header">
+                  <h3>Notifications</h3>
+                  {dueNotifications.length > 0 && (
+                    <span className="badge-count">{dueNotifications.length} new</span>
+                  )}
                 </div>
-                <div className="dropdown-user-info">
-                  <span className="dropdown-user-name">{user?.fullName || user?.name}</span>
-                  <span className="dropdown-user-email">{user?.email}</span>
+                <div className="notification-list">
+                  {dueNotifications.length === 0 ? (
+                    <div className="empty-notifications">
+                      <p>No upcoming bills due soon.</p>
+                    </div>
+                  ) : (
+                    dueNotifications.map(bill => (
+                      <div key={bill.id} className="notification-item">
+                        <div className="notif-icon-box">
+                          <FaCalendarCheck />
+                        </div>
+                        <div className="notif-content">
+                          <p className="notif-title">{bill.name}</p>
+                          <p className="notif-time">Due {new Date(bill.dueDate).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}</p>
+                        </div>
+                        <span className="notif-amount">
+                          {/* Remove currency symbol as it is already included in formatCurrency */}
+                          {formatCurrency(bill.amount).replace(/[^0-9.,]/g, '')}
+                        </span>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
+            )}
+          </div>
 
-              <div className="dropdown-divider"></div>
+          <div className="nav-divider"></div>
 
-              <Link
-                to="/profile"
-                className="dropdown-item"
-                role="menuitem"
-                onClick={() => setShowUserMenu(false)}
-              >
-                <FaUserCircle />
-                <span>Profile</span>
-              </Link>
+          <div ref={userMenuRef}>
+            <button
+              className="user-profile-trigger"
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              aria-expanded={showUserMenu}
+              aria-label="User menu"
+              aria-haspopup="true"
+            >
+              <div className="user-avatar" aria-hidden="true">
+                {user?.fullName?.charAt(0) || user?.name?.charAt(0) || 'U'}
+              </div>
+              <FaChevronDown className={`dropdown-arrow ${showUserMenu ? 'open' : ''}`} />
+            </button>
 
-              <Link
-                to="/settings"
-                className="dropdown-item"
-                role="menuitem"
-                onClick={() => setShowUserMenu(false)}
-              >
-                <FaCog />
-                <span>Settings</span>
-              </Link>
+            {/* User Dropdown Menu */}
+            {showUserMenu && (
+              <div className="user-dropdown-menu" role="menu">
+                <div className="user-dropdown-header">
+                  <div className="dropdown-avatar">
+                    {user?.fullName?.charAt(0) || user?.name?.charAt(0) || 'U'}
+                  </div>
+                  <div className="dropdown-user-info">
+                    <span className="dropdown-user-name">{user?.fullName || user?.name}</span>
+                    <span className="dropdown-user-email">{user?.email}</span>
+                  </div>
+                </div>
 
-              <div className="dropdown-divider"></div>
+                <div className="dropdown-divider"></div>
 
-              <button
-                onClick={handleLogout}
-                className="dropdown-item logout"
-                role="menuitem"
-              >
-                <FaSignOutAlt />
-                <span>Logout</span>
-              </button>
-            </div>
-          )}
+                <Link
+                  to="/profile"
+                  className="dropdown-item"
+                  role="menuitem"
+                  onClick={() => setShowUserMenu(false)}
+                >
+                  <FaUserCircle />
+                  <span>Profile</span>
+                </Link>
+
+                <Link
+                  to="/settings"
+                  className="dropdown-item"
+                  role="menuitem"
+                  onClick={() => setShowUserMenu(false)}
+                >
+                  <FaCog />
+                  <span>Settings</span>
+                </Link>
+
+                <div className="dropdown-divider"></div>
+
+                <button
+                  onClick={handleLogout}
+                  className="dropdown-item logout"
+                  role="menuitem"
+                >
+                  <FaSignOutAlt />
+                  <span>Logout</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -719,6 +792,31 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
+
+        {/* Upcoming Bills Widget */}
+        {upcomingBills.length > 0 && (
+          <div className="upcoming-bills-widget">
+            <h3 className="widget-title">
+              <FaCalendarCheck className="widget-icon" />
+              Upcoming Bills (Next 7 Days)
+            </h3>
+            <div className="bills-list">
+              {upcomingBills.map(bill => (
+                <div key={bill.id} className="bill-item">
+                  <div className="bill-date-box">
+                    <span className="bill-month">{new Date(bill.dueDate).toLocaleDateString('en-IN', { month: 'short' }).toUpperCase()}</span>
+                    <span className="bill-day">{new Date(bill.dueDate).getDate()}</span>
+                  </div>
+                  <div className="bill-info">
+                    <span className="bill-name">{bill.name}</span>
+                    <span className="bill-category">{bill.category}</span>
+                  </div>
+                  <span className="bill-amount">{formatCurrency(bill.amount)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Quick Actions */}
         <div className="quick-actions-section">

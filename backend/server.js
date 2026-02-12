@@ -58,7 +58,7 @@ app.use((req, res, next) => {
     console.log(`\n═══════════════════════════════════════════════════`);
     console.log(`📨 ${timestamp} - ${req.method} ${req.originalUrl}`);
     console.log(`🌍 Origin: ${req.headers.origin || 'No origin'}`);
-    
+
     // Mask Auth Header in logs
     const authHeader = req.headers.authorization;
     if (authHeader) {
@@ -71,7 +71,7 @@ app.use((req, res, next) => {
         // Create a safe copy of the body for logging
         const safeBody = { ...req.body };
         const sensitiveKeys = ['password', 'token', 'refreshToken', 'accessToken', 'client_secret', 'code'];
-        
+
         sensitiveKeys.forEach(key => {
             if (safeBody[key]) safeBody[key] = '***[REDACTED]***';
         });
@@ -131,6 +131,7 @@ const budgetRoutes = require('./routes/budgetRoutes');
 const savingGoalRoutes = require('./routes/savingGoalRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const subscriptionRoutes = require('./routes/subscriptionRoutes');
 
 // ==================== ROUTE MOUNTING ====================
 app.use('/api/auth', authRoutes);
@@ -139,6 +140,7 @@ app.use('/api/budget', budgetRoutes);
 app.use('/api/savings-goals', savingGoalRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
 
 // ==================== HEALTH CHECK ====================
 
@@ -228,6 +230,10 @@ app.use('*', (req, res) => {
 });
 
 // ==================== START SERVER ====================
+// Initialize Scheduler
+const { initScheduler } = require('./utils/scheduler');
+initScheduler();
+
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {

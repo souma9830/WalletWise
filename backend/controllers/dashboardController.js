@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Transaction = require('../models/Transactions');
 const Budget = require('../models/Budget');
 const SavingsGoal = require('../models/SavingGoal');
+const Subscription = require('../models/Subscription');
 
 // Dashboard Summary
 const getDashboardSummary = async (req, res) => {
@@ -13,11 +14,12 @@ const getDashboardSummary = async (req, res) => {
         const endOfPrevMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0, 23, 59, 59, 999);
 
         // Get all data in parallel
-        const [transactions, budget, savingsGoals, user] = await Promise.all([
+        const [transactions, budget, savingsGoals, user, subscriptions] = await Promise.all([
             Transaction.find({ userId }),
             Budget.findOne({ userId, isActive: true }),
             SavingsGoal.find({ userId, isActive: true }),
-            User.findById(userId).select('-passwordHash -refreshTokenHash')
+            User.findById(userId).select('-passwordHash -refreshTokenHash'),
+            Subscription.find({ userId, isActive: true })
         ]);
 
         // Calculate monthly expenses and income
@@ -62,7 +64,7 @@ const getDashboardSummary = async (req, res) => {
             Math.min((monthlyExpenses / monthlyBudget) * 100, 100) : 0;
         const budgetLeft = Math.max(0, monthlyBudget - monthlyExpenses);
 
-        // Calculate total balance - use User.walletBalance as the source of truth
+        // Calculate total balance
         const totalBalance = user.walletBalance;
 
         // Category spending (current month)
@@ -102,6 +104,54 @@ const getDashboardSummary = async (req, res) => {
             ? ((monthlyExpenses - prevMonthExpenses) / prevMonthExpenses) * 100
             : (monthlyExpenses > 0 ? 100 : 0);
 
+        // Calculate upcoming bills (next 7 days)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Reset time to start of day for accurate comparison
+
+        const nextWeek = new Date(today);
+        nextWeek.setDate(today.getDate() + 7);
+        nextWeek.setHours(23, 59, 59, 999);
+
+        const upcomingBills = subscriptions
+            .map(sub => {
+                let dueDate = new Date(sub.nextDueDate);
+
+                // If due date is in the past, project it forward to the next cycle
+                while (dueDate < today) {
+                    if (sub.billingCycle === 'monthly') {
+                        dueDate.setMonth(dueDate.getMonth() + 1);
+                    } else if (sub.billingCycle === 'yearly') {
+                        dueDate.setFullYear(dueDate.getFullYear() + 1);
+                    } else if (sub.billingCycle === 'weekly') {
+                        dueDate.setDate(dueDate.getDate() + 7);
+                    } else {
+                        break; // Safety break for unknown cycles
+                    }
+                }
+
+                // Return a new object with the projected date
+                // We convert Mongoose document to object to avoid mutation issues
+                return {
+                    id: sub._id,
+                    name: sub.name,
+                    amount: sub.amount,
+                    dueDate: dueDate,
+                    category: sub.category,
+                    billingCycle: sub.billingCycle
+                };
+            })
+            .filter(sub => {
+                return sub.dueDate >= today && sub.dueDate <= nextWeek;
+            })
+            .sort((a, b) => a.dueDate - b.dueDate) // Sort by nearest due date
+            .map(sub => ({
+                id: sub.id,
+                name: sub.name,
+                amount: sub.amount,
+                dueDate: sub.dueDate,
+                category: sub.category
+            }));
+
         res.json({
             success: true,
             user: {
@@ -134,6 +184,7 @@ const getDashboardSummary = async (req, res) => {
                 progress: g.progress,
                 monthlyContribution: g.monthlyContribution
             })),
+            upcomingBills,
             notifications: 0
         });
 

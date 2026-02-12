@@ -12,7 +12,8 @@ import {
   FaChartBar,
   FaUser,
   FaSun,
-  FaMoon
+  FaMoon,
+  FaCalendarCheck
 } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -24,6 +25,7 @@ const navItems = [
   { id: 'budget', label: 'Budget', icon: FaChartPie, path: '/budget' },
   { id: 'goals', label: 'Goals', icon: FaBullseye, path: '/goals' },
   { id: 'reports', label: 'Reports', icon: FaChartBar, path: '/reports' },
+  { id: 'subscriptions', label: 'Subscriptions', icon: FaCalendarCheck, path: '/subscriptions' },
   { id: 'settings', label: 'Settings', icon: FaCog, path: '/settings' }
 ];
 

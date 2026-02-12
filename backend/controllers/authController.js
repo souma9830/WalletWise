@@ -83,7 +83,7 @@ const safeUser = (user) => ({
   currency: user.currency,
   dateFormat: user.dateFormat,
   language: user.language,
-  
+
   incomeFrequency: user.incomeFrequency,
   incomeSources: user.incomeSources,
   priorities: user.priorities,

@@ -41,15 +41,20 @@ const Login = () => {
           autoClose: 1500,
           pauseOnHover: false
         });
-      } else if (data?.code === 'EMAIL_NOT_VERIFIED') {
-        toast.info('Please verify your email to continue.');
-        const targetEmail = data?.email || email;
-        navigate(`/verify-email?email=${encodeURIComponent(targetEmail)}`);
       } else {
         toast.error(data?.message || 'Login failed');
       }
     } catch (error) {
       console.error('Login error:', error);
+
+      const code = error.response?.data?.code;
+      if (code === 'EMAIL_NOT_VERIFIED') {
+        toast.info('Please verify your email to continue.');
+        const targetEmail = error.response?.data?.email || email;
+        navigate(`/verify-email?email=${encodeURIComponent(targetEmail)}`);
+        return;
+      }
+
       const message =
         error.response?.data?.message ||
         error.response?.data?.errors?.[0]?.msg ||

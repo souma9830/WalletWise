@@ -16,6 +16,7 @@ import Transactions from './pages/Transactions';
 import Budget from './pages/Budget';
 import Goals from './pages/Goals';
 import Reports from './pages/Reports';
+import SubscriptionDashboard from './pages/SubscriptionDashboard';
 import Settings from './pages/Settings';
 import Profile from './pages/Profile';
 
@@ -168,6 +169,15 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <Reports />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/subscriptions"
+                element={
+                  <ProtectedRoute>
+                    <SubscriptionDashboard />
                   </ProtectedRoute>
                 }
               />
