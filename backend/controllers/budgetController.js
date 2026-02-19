@@ -1,5 +1,6 @@
 const Budget = require('../models/Budget');
 const Transaction = require('../models/Transactions');
+const { isValidObjectId } = require('../utils/validation');
 
 // Set/Update Budget
 const setBudget = async (req, res) => {
@@ -363,6 +364,10 @@ const deleteBudget = async (req, res) => {
         const { id } = req.params;
         const userId = req.userId;
 
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid budget ID format' });
+        }
+
         const budget = await Budget.findOne({
             _id: id,
             userId
@@ -399,6 +404,10 @@ const updateBudget = async (req, res) => {
         const { id } = req.params;
         const userId = req.userId;
         const updates = req.body;
+
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid budget ID format' });
+        }
 
         const budget = await Budget.findOne({
             _id: id,

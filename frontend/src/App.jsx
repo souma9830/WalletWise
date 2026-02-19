@@ -25,6 +25,9 @@ import DecisionHelper from './pages/DecisionHelper';
 import Login from './components/Login';
 import Signup from './components/Signup';
 import VerifyEmail from './components/VerifyEmail';
+import ForgotPassword from './components/ForgotPassword';
+import VerifyResetOtp from './components/VerifyResetOtp';
+import ResetPassword from './components/ResetPassword';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
 
@@ -78,6 +81,33 @@ function App() {
                 element={
                   <PublicRoute>
                     <Signup />
+                  </PublicRoute>
+                }
+              />
+
+              <Route
+                path="/forgot-password"
+                element={
+                  <PublicRoute>
+                    <ForgotPassword />
+                  </PublicRoute>
+                }
+              />
+
+              <Route
+                path="/forgot-password/verify"
+                element={
+                  <PublicRoute>
+                    <VerifyResetOtp />
+                  </PublicRoute>
+                }
+              />
+
+              <Route
+                path="/forgot-password/reset"
+                element={
+                  <PublicRoute>
+                    <ResetPassword />
                   </PublicRoute>
                 }
               />

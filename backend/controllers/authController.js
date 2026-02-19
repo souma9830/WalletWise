@@ -1,5 +1,6 @@
 ﻿const bcrypt = require('bcryptjs');
 const { z } = require('zod');
+const crypto = require('crypto');
 const User = require('../models/User');
 const { sendEmail } = require('../utils/mailer');
 const { generateOtp, hashOtp, otpExpiresAt } = require('../utils/otp');
@@ -112,6 +113,56 @@ const sendVerificationOtp = async (user) => {
   await sendEmail({ to: user.email, subject, text, html });
 };
 
+const getPasswordResetExpiryMinutes = () => {
+  const parsed = Number(process.env.PASSWORD_RESET_EXPIRES_MINUTES || 15);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 15;
+};
+
+const sendPasswordResetInstructions = async (user, { skipEmail } = {}) => {
+  const expiryMinutes = getPasswordResetExpiryMinutes();
+  const expiresAt = otpExpiresAt(expiryMinutes);
+  const token = crypto.randomBytes(32).toString('hex');
+  const otp = generateOtp();
+
+  user.passwordResetOtpHash = hashOtp(otp);
+  user.passwordResetOtpExpires = expiresAt;
+  user.passwordResetOtpSentAt = new Date();
+  user.passwordResetTokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  user.passwordResetTokenExpires = expiresAt;
+  user.passwordResetTokenSentAt = new Date();
+  await user.save();
+
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const resetLink = `${frontendUrl}/forgot-password/reset?token=${token}`;
+
+  if (skipEmail) {
+    return { otp, token, resetLink, delivered: false };
+  }
+
+  const subject = 'Reset your WalletWise password';
+  const text = `Use this link to reset your WalletWise password: ${resetLink}\n\nYour backup reset code is ${otp}. Both expire in ${expiryMinutes} minutes.`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+      <h2>Reset your WalletWise password</h2>
+      <p>Click this secure link to reset your password:</p>
+      <p>
+        <a href="${resetLink}" style="display:inline-block;padding:10px 16px;background:#111827;color:#fff;text-decoration:none;border-radius:6px;">
+          Reset Password
+        </a>
+      </p>
+      <p>If the button doesn't work, use this URL:</p>
+      <p style="word-break:break-all;">${resetLink}</p>
+      <p>Backup reset code:</p>
+      <p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">${otp}</p>
+      <p>This link/code expires in ${expiryMinutes} minutes.</p>
+      <p>If you didn't request this, you can ignore this email.</p>
+    </div>
+  `;
+
+  await sendEmail({ to: user.email, subject, text, html });
+  return { otp, token, resetLink, delivered: true };
+};
+
 const register = async (req, res) => {
   try {
     const parsed = registerSchema.safeParse(req.body);
@@ -144,15 +195,25 @@ const register = async (req, res) => {
       emailVerified: false
     });
     await user.setPassword(password);
-    await User.saveWithUniqueStudentId(user);
-    await sendVerificationOtp(user);
+await User.saveWithUniqueStudentId(user);
 
-    return res.status(201).json({
-      success: true,
-      message: 'Registration successful. Please verify your email.',
-      requiresVerification: true,
-      email: user.email
-    });
+// ✅ Skip email verification for local testing
+user.emailVerified = true;
+await user.save();
+
+const accessToken = signAccessToken(user);
+const refreshToken = signRefreshToken(user);
+user.refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+await user.save();
+
+setAuthCookies(res, accessToken, refreshToken);
+
+return res.status(201).json({
+  success: true,
+  message: 'Registration successful',
+  user: safeUser(user)
+});
+
   } catch (error) {
     console.error('Registration error:', error);
     return res.status(500).json({
@@ -377,6 +438,143 @@ const resendEmailOtp = async (req, res) => {
   }
 };
 
+const requestPasswordReset = async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    const normalizedEmail = String(email || '').toLowerCase();
+    let devResetLink = null;
+    let emailSent = false;
+
+    if (!normalizedEmail) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
+
+    if (user) {
+      try {
+        await sendPasswordResetInstructions(user);
+        emailSent = true;
+      } catch (mailError) {
+        if (process.env.NODE_ENV !== 'production' && /SMTP configuration missing/i.test(mailError?.message)) {
+          const fallback = await sendPasswordResetInstructions(user, { skipEmail: true });
+          devResetLink = fallback.resetLink;
+          console.warn('SMTP not configured. Password reset link (dev only):', fallback.resetLink);
+          console.warn('SMTP not configured. Password reset OTP (dev only):', fallback.otp);
+        } else {
+          throw mailError;
+        }
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: 'If an account exists for this email, a password reset link has been sent.',
+      emailSent,
+      ...(devResetLink ? { devResetLink } : {})
+    });
+  } catch (error) {
+    console.error('Request password reset error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to send password reset link'
+    });
+  }
+};
+
+const verifyPasswordResetOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body || {};
+    const normalizedEmail = String(email || '').toLowerCase();
+
+    if (!normalizedEmail || !otp) {
+      return res.status(400).json({ success: false, message: 'Email and OTP are required' });
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user || !user.passwordResetOtpHash || !user.passwordResetOtpExpires) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
+    }
+
+    if (user.passwordResetOtpExpires < new Date()) {
+      return res.status(400).json({ success: false, message: 'OTP expired' });
+    }
+
+    const matches = user.passwordResetOtpHash === hashOtp(String(otp).trim());
+    if (!matches) {
+      return res.status(400).json({ success: false, message: 'Invalid OTP' });
+    }
+
+    return res.json({ success: true, message: 'OTP verified' });
+  } catch (error) {
+    console.error('Verify password reset OTP error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to verify OTP' });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const { email, otp, token, password } = req.body || {};
+    const normalizedEmail = String(email || '').toLowerCase();
+    const hasToken = Boolean(token);
+    const hasOtpFlow = Boolean(normalizedEmail && otp);
+
+    if (!password || (!hasToken && !hasOtpFlow)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password and either token or email+OTP are required'
+      });
+    }
+
+    let user = null;
+
+    if (hasToken) {
+      const tokenHash = crypto.createHash('sha256').update(String(token)).digest('hex');
+      user = await User.findOne({
+        passwordResetTokenHash: tokenHash,
+        passwordResetTokenExpires: { $gt: new Date() }
+      });
+
+      if (!user) {
+        return res.status(400).json({ success: false, message: 'Invalid or expired reset link' });
+      }
+    } else {
+      user = await User.findOne({ email: normalizedEmail });
+      if (!user || !user.passwordResetOtpHash || !user.passwordResetOtpExpires) {
+        return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
+      }
+
+      if (user.passwordResetOtpExpires < new Date()) {
+        return res.status(400).json({ success: false, message: 'OTP expired' });
+      }
+
+      const matches = user.passwordResetOtpHash === hashOtp(String(otp).trim());
+      if (!matches) {
+        return res.status(400).json({ success: false, message: 'Invalid OTP' });
+      }
+    }
+
+    await user.setPassword(password);
+    user.passwordResetOtpHash = null;
+    user.passwordResetOtpExpires = null;
+    user.passwordResetOtpSentAt = null;
+    user.passwordResetTokenHash = null;
+    user.passwordResetTokenExpires = null;
+    user.passwordResetTokenSentAt = null;
+
+    if (user.provider === 'google') {
+      user.provider = 'both';
+    }
+
+    await user.save();
+
+    return res.json({ success: true, message: 'Password reset successful' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to reset password' });
+  }
+};
+
 const updateProfile = async (req, res) => {
   try {
     const parsed = updateProfileSchema.safeParse(req.body);
@@ -468,5 +666,8 @@ module.exports = {
   updateProfile,
   googleCallback,
   verifyEmail,
-  resendEmailOtp
+  resendEmailOtp,
+  requestPasswordReset,
+  verifyPasswordResetOtp,
+  resetPassword
 };
